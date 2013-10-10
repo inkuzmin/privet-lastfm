@@ -28,19 +28,14 @@ var privet2lastfm = {
                 var flashPlayer = flashPlayers[i];
                 var flashVars = flashPlayer.getAttribute('flashvars');
                 var fileURL = getFileURL(flashVars);
-//                console.log(fileURL);
-//                if (fileURL !== -1) {
-//                    flashPlayer.setAttribute('data-url', fileURL);
-//                    var a = new A(flashPlayer, {
-//                        title: '',
-//                        format: ''
-//                    });
-//                    var a = d.createElement('a');
-//                    a.href = fileURL;
-//                    a.innerHTML = fileURL;
-//                    flashPlayer.insertBefore(a);
-
-//                }
+                console.log(fileURL);
+                if (fileURL !== -1) {
+                    flashPlayer.setAttribute('data-url', fileURL);
+                    var a = new A(flashPlayer, {
+                        title: '',
+                        format: ''
+                    });
+                }
             }
         }
     }
