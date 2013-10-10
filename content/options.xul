@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<?xml-stylesheet href="chrome://global/skin/" type="text/css"?>
+
+<prefwindow id="appPreferences"
+            xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
+
+	<prefpane label="Privet, last.fm! Preferences">
+		<preferences>
+			<preference id="player-replacer-autorun" name="extensions.playerreplacer.autorun" type="bool"/>
+
+		</preferences>
+
+		<groupbox>
+			<caption label="Settings"/>
+			<grid>
+				<columns>
+					<column flex="4"/>
+
+					<column flex="1"/>
+				</columns>
+				<rows>
+					<row>
+						<label value="Allow access to last.fm"/>
+						<checkbox id="autorun" preference="player-replacer-autorun"/>
+
+					</row>
+				</rows>
+			</grid>
+		</groupbox>
+
+	</prefpane>
+    <script src="config.js"/>
+</prefwindow>

@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<?xml-stylesheet href="chrome://privet2lastfm/skin/skin.css" type="text/css"?>
+<!DOCTYPE linktargetfinder SYSTEM "chrome://privet2lastfm/locale/translations.dtd">
+<overlay id="sample" xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
+
+        <script src="ascii-player.js" />
+		<script src="privet2lastfm.js" />
+
+</overlay>

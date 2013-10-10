@@ -1,0 +1,8 @@
+content	privet2lastfm	content/
+content	privet2lastfm	content/ contentaccessible=yes
+overlay	chrome://browser/content/browser.xul	chrome://privet2lastfm/content/overlay.xul
+
+locale	privet2lastfm	en-US	locale/en-US/
+
+skin	privet2lastfm	classic/1.0	skin/
+style	chrome://global/content/customizeToolbar.xul	chrome://privet2lastfm/skin/overlay.css
