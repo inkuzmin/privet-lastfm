@@ -112,7 +112,7 @@ var privet2lastfm = function () {
             console.log(realDuration)
             console.log((scrobblingPercent * this.duration / 100))
 
-            if (realDuration > (scrobblingPercent * this.duration * 1000 / 100)) {
+            if (realDuration > (scrobblingPercent * this.duration * 1000 / 100) && this.duration) {
                 console.log('SCROBBLE')
                 var a = [];
                 a[0] = this.artist;
