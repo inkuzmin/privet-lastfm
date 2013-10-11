@@ -1,33 +1,6 @@
-<?xml version="1.0"?>
-<?xml-stylesheet href="chrome://global/skin/" type="text/css"?>
-
-<prefwindow id="appPreferences"
-            xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
-
-	<prefpane label="Privet, last.fm! Preferences">
-		<preferences>
-			<preference id="player-replacer-autorun" name="extensions.playerreplacer.autorun" type="bool"/>
-
-		</preferences>
-
-		<groupbox>
-			<caption label="Settings"/>
-			<grid>
-				<columns>
-					<column flex="4"/>
-
-					<column flex="1"/>
-				</columns>
-				<rows>
-					<row>
-						<label value="Allow access to last.fm"/>
-						<checkbox id="autorun" preference="player-replacer-autorun"/>
-
-					</row>
-				</rows>
-			</grid>
-		</groupbox>
-
-	</prefpane>
-    <script src="config.js"/>
-</prefwindow>
+<?xml version="1.0" ?>
+<vbox xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
+  <setting type="string" pref="extensions.privet2lastfm.username" title="Username on privet.ru" desc="Optional but recommended. Improves performance a lot."/>
+  <setting id="scrobbling" type="bool" pref="extensions.privet2lastfm.scrobbling" title="Enable last.fm scrobbling" desc="First time a new window with the last.fm access control dialog will be open." checked="false" />
+  <setting type="integer" pref="extensions.privet2lastfm.scrobblingPercent" title="Scrobbling at percent" desc="50% is minimum that required by last.fm." min="50" max="100"/>
+</vbox>

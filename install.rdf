@@ -9,11 +9,13 @@
     <em:version>2.0</em:version>
     <em:description>Scrobbles tracks from privet.ru to last.fm</em:description>
     <em:creator>Ivan Kuzmin</em:creator>
+    <em:type>2</em:type>
     <!-- optional items -->
     <em:contributor>Shoka (http://www.last.fm/user/shokachu)</em:contributor>
     <em:contributor>Wen (http://www.last.fm/user/Wen666)</em:contributor>
-    <em:homepageURL>http://inkuzmin.ru</em:homepageURL>
-    <!--<em:optionsURL>chrome://privet2lastfm/content/options.xul</em:optionsURL>-->
+    <em:homepageURL>https://github.com/inkuzmin/privet2lastfm</em:homepageURL>
+    <em:optionsURL>chrome://privet2lastfm/content/options.xul</em:optionsURL>
+    <em:optionsType>2</em:optionsType>
     <!--em:optionsURL>chrome://sampleext/content/settings.xul</em:optionsURL>
     <em:aboutURL>chrome://sampleext/content/about.xul</em:aboutURL>
     <em:iconURL>chrome://sampleext/skin/mainicon.png</em:iconURL>

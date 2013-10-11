@@ -3,7 +3,12 @@
 <!DOCTYPE linktargetfinder SYSTEM "chrome://privet2lastfm/locale/translations.dtd">
 <overlay id="sample" xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
 
-        <script src="ascii-player.js" />
-		<script src="privet2lastfm.js" />
 
+
+        <script src="observer.js" />
+		<script src="md5sum.js" />
+        <script src="lastfm.js" />
+        <script src="privet2lastfm.js" />
+        <script src="options.js" />
+        <script src="xhrlistener.js" />
 </overlay>
