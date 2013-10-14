@@ -6,7 +6,7 @@
 **/
 
 // ^^^ Based on ^^^ and fix to pythonic hash lib scheme
-// But I don't know any about this solution's licence.
+// I don't know any about this solution's licence.
 // If you interesting at it, look closely this page: http://www.webtoolkit.info/license
 
 

@@ -9,10 +9,8 @@ LastFM.prototype = {
         this.key = LastFM.KEY;
         this.secret = LastFM.SECRET;
         this.url = 'http://ws.audioscrobbler.com/2.0/';
-
     },
     _sendXMLRequest: function(url, params, callback, method) {
-
         var self = this;
         var xhr = new XMLHttpRequest();
         xhr.onreadystatechange = function() {
@@ -49,7 +47,6 @@ LastFM.prototype = {
     },
 
     updateNowPlaying: function(a) {
-
         var params = {
             'method': 'track.updateNowPlaying',
             'duration': a[2],
@@ -62,9 +59,6 @@ LastFM.prototype = {
         var str = ''
         for (param in params)
             str += param + '=' +  encodeURIComponent(params[param]) + '&';
-//
-//        console.log(params.artist);
-//        console.log(params.track);
 
         this._sendXMLRequest(this.url, '?' + str + 'format=json&api_sig=' + this._generateSigKey(params), this._test, 1);
 
@@ -84,25 +78,7 @@ LastFM.prototype = {
             str += param + '=' +  encodeURIComponent(params[param]) + '&';
 
         this._sendXMLRequest(this.url, '?' + str + 'format=json&api_sig=' + this._generateSigKey(params), this._test, 1);
-
-
     },
-    // lol: function(user, message) {
-    //     var params = {
-    //         'method': 'user.shout',
-    //         'user': user,
-    //         'message':  message,
-    //         'api_key': this.key,
-    //         'sk': this.sess
-    //     };
-    //     var str = '';
-    //     for (param in params) {
-    //         str += param + '=' +  encodeURIComponent(params[param]) + '&';
-    //             }
-    //     this._sendXMLRequest(this.url, '?' + str + 'format=json&api_sig=' + this._generateSigKey(params), this._test, 1);
-
-
-    // },
     touch: function (fn) {
         var params = {
             'method': 'user.getInfo',
@@ -130,6 +106,5 @@ LastFM.prototype = {
     }
 
 }
-
-LastFM.KEY = '';
-LastFM.SECRET = '';
+LastFM.KEY = 'fda331bd32a488e53dfd0c58b9d7666b';
+LastFM.SECRET = 'a41991c9cd5cc97a7061c8f9d5f8aa13';
