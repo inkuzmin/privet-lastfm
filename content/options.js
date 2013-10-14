@@ -51,11 +51,13 @@ var myListener = new PrefListener(
       case "scrobbling":
         // extensions.myextension.pref2 was changed
 //          privet2lastfm.addScrobbling();
+          console.log(2222222)
           privet2lastfm.addScrobbling.call(privet2lastfm);
         break;
       case "lastfmSess":
+          console.log(111111111)
           // extensions.myextension.pref2 was changed
-          privet2lastfm.addScrobbling.call(privet2lastfm);
+//          privet2lastfm.addScrobbling.call(privet2lastfm);
           break;
       case "scrobblingPercent":
           // extensions.myextension.pref2 was changed

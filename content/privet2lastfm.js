@@ -8,6 +8,8 @@ var privet2lastfm = function () {
     var lastActivePlayer = null;
     var privetUser = '';
 
+    var tracks = [];
+
 //    function getFileURL(flashVars) {
 //        //  var flashVars = flashPlayer.getAttribute('flashvars');
 //        flashVars = flashVars.split('&');
@@ -27,6 +29,190 @@ var privet2lastfm = function () {
 //        style.href = 'chrome://privet2lastfm/skin/skin.css';
 //        d.head.appendChild(style);
 //    }
+
+
+    function Track(id, target) {
+        this.id = id;
+        this.target = target;
+        this.init();
+
+    }
+
+    Track.prototype = {
+        constructor: Track,
+        init: function () {
+            this.initSlots();
+            this.addTimeStart();
+            this.play = true;
+            this.getOtherFromNode();
+        },
+        initSlots: function () {
+            this.timestart = [];
+            this.timestop = [];
+            this.play = false;
+            this.duration = 0;
+            this.title = '';
+            this.artist = '';
+        },
+        addEventHandler: function (eventType, eventHandler) {
+            var self = this;
+            Observer.subscribe(eventType, eventHandler, self);
+        },
+
+        broadcast: function (eventType, data) {
+            data = data || null;
+            Observer.broadcast(eventType, data);
+        },
+        addTimeStart: function () {
+            var timestamp = new Date().getTime();
+            this.timestart.push(timestamp);
+
+        },
+        addTimeStop: function () {
+            // если первый таймстарт -- послать ласту запрос на обновление текущего трека
+            var timestamp = new Date().getTime();
+            this.timestop.push(timestamp);
+        },
+        getOtherFromNode: function () {
+            var self = this;
+            var node = self.getNode();
+            if (node) {
+                self.getOther(node);
+            }
+            else {
+                getXML(privetUser, function (xmlData) {
+                    node = self.getNode(xmlData);
+                    if (node) {
+                        self.getOther(node);
+                    }
+                })
+            }
+        },
+        getOther: function (node) {
+            var self = this;
+            self.title = self.getTitle(node);
+            self.artist = self.getArtist(node);
+            self.getDuration(node, function (duration) {
+                var a = [];
+                a[0] = self.artist;
+                a[1] = self.title;
+                a[2] = duration;
+                lastFMslot.updateNowPlaying(a);
+            });
+        },
+        getNode: function (xmlDB) {
+            // поискать в xmlSlot
+            // если нет, проверить адрес
+            //   если адрес соответствует юзернейму -- перезагрузить xmlSlot
+            //   если нет -- взять xmlSlot нового адреса
+            //     поискать в нем
+            //     если нет - увы
+            var self = this;
+
+            function getNodeById(ids) {
+                var i, len = ids.length;
+                for (i = 0; i < len; i += 1) {
+                    var id = ids[i];
+                    if (id.firstChild.nodeValue === self.id) {
+                        return id.parentNode;
+                    }
+                }
+                return false;
+            }
+
+            xmlDB = xmlDB || xmlSlot;
+
+            var doc = xmlDB.documentElement;
+            var ids = doc.getElementsByTagName('identifier');
+            var node = getNodeById(ids);
+            return node;
+
+        },
+        getTitle: function (node) {
+            // из getNode
+            return node.firstChild.firstChild.nodeValue;
+        },
+        getArtist: function (node) {
+            // из getNode
+            return node.lastChild.firstChild.nodeValue;
+        },
+        getDuration: function (node, fn) {
+            // взять путь из getNode
+            // получить заголовок, вычислить размер, как-то так:
+            /*
+             req.onreadystatechange = function() {
+             if (req.readyState === 4) {
+             if (req.status === 200)
+             req.getResponseHeader('Content-Length')
+             }
+             };
+             req.open('HEAD', url, true);
+             req.send(null);
+             */
+            // поделить на битрейт (128)
+            // получились секунды, записать.
+            var self = this;
+            var url = node.children[1].firstChild.nodeValue;
+            var xhr = new XMLHttpRequest();
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4) {
+                    if (xhr.status === 200)
+                        var duration = xhr.getResponseHeader('Content-Length');
+                    var sec = Math.floor((duration / 8 / 128000) * 60);
+                    self.duration = sec;
+                    fn(sec);
+                }
+            };
+            xhr.open('HEAD', url, true);
+            xhr.send(null);
+
+        },
+        toScrobbleOrNotToScrobble: function () {
+            var i, len = this.timestop.length;
+            var timestops = 0;
+            for (i = 0; i < len; i += 1) {
+                timestops += this.timestop[i];
+            }
+            var len = this.timestart.length;
+            var timestarts = 0;
+            for (i = 0; i < len; i += 1) {
+                timestarts += this.timestart[i];
+            }
+            var realDuration = timestops - timestarts;
+
+            console.log(realDuration)
+            console.log((scrobblingPercent * this.duration / 100))
+
+            if (realDuration > (scrobblingPercent * this.duration * 1000 / 100) && this.duration) {
+                console.log('SCROBBLE')
+                var a = [];
+                a[0] = this.artist;
+                a[1] = this.title;
+                lastFMslot.scrobble(a);
+            }
+            else {
+                console.log('DO NOT SCROBBLE')
+            }
+
+            // все таймстопы минус все таймстарты > scrobblingPercent * duration / 100, то скроблить, если нет, то увы
+        },
+        drop: function () {
+            // если состояние плей --
+            //   перевести в состояние стоп,
+            //   добавить таймстоп
+            //   вызвать тускроблорноттускробл
+            //   обнулить поля
+            // иначе
+            //   вызвать тускроблорноттускробл
+            //   обнулить поля
+
+            if (this.play) {
+                this.play = false;
+                this.addTimeStop();
+            }
+            this.toScrobbleOrNotToScrobble();
+        }
+    }
 
 
     var currentTrack = {
@@ -215,11 +401,11 @@ var privet2lastfm = function () {
             var self = this;
             var url = node.children[1].firstChild.nodeValue;
             var xhr = new XMLHttpRequest();
-            xhr.onreadystatechange = function() {
-            if (xhr.readyState === 4) {
-                if (xhr.status === 200)
-                    var duration = xhr.getResponseHeader('Content-Length');
-                    var sec = Math.floor((duration/8/128000)*60);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4) {
+                    if (xhr.status === 200)
+                        var duration = xhr.getResponseHeader('Content-Length');
+                    var sec = Math.floor((duration / 8 / 128000) * 60);
                     self.duration = sec;
                     fn(sec);
                 }
@@ -308,7 +494,7 @@ var privet2lastfm = function () {
             Observer.broadcast(eventType, data);
         },
         tryLastFMsess: function () {
-            prefManager.setCharPref('extensions.privet2lastfm.lastfmSess', '');
+//            prefManager.setCharPref('extensions.privet2lastfm.lastfmSess', '');
         },
         loadXML: function (username) {
             username = username || prefManager.getCharPref('extensions.privet2lastfm.username');
@@ -324,16 +510,25 @@ var privet2lastfm = function () {
 
             var lastfmSess = prefManager.getCharPref('extensions.privet2lastfm.lastfmSess');
             var scrobbling = prefManager.getBoolPref('extensions.privet2lastfm.scrobbling');
+
             if (scrobbling) {
                 if (lastfmSess) {
                     lastFMslot = new LastFM(lastfmSess);
+                    lastFMslot.touch(function (r) {
+                        if (JSON.parse(r).error) {
+                            prefManager.setCharPref('extensions.privet2lastfm.lastfmSess', '');
+                            self.addScrobbling();
+                        }
+                    });
                 }
                 else {
                     self.authorize();
+
                 }
             }
         },
         authorize: function () {
+            var self = this;
             var lastFM = new LastFM('');
             lastFM.getToken(function (r) {
                 var token = JSON.parse(r).token;
@@ -341,9 +536,7 @@ var privet2lastfm = function () {
                 var actualTab = gBrowser.addTab(url);
                 gBrowser.selectedTab = actualTab;
                 var newTabBrowser = gBrowser.getBrowserForTab(actualTab);
-                console.log(1);
-                newTabBrowser.addEventListener('load', function () {
-                    console.log(2);
+                newTabBrowser.addEventListener('DOMContentLoaded', function () {
                     var doc = newTabBrowser.contentDocument;
                     var forms = doc.getElementsByTagName('form');
                     var i, len = forms.length;
@@ -359,6 +552,8 @@ var privet2lastfm = function () {
                                         console.log(r);
                                         if (sess) {
                                             prefManager.setCharPref('extensions.privet2lastfm.lastfmSess', sess);
+                                            alert('Access granted, thank you!\nNow go to privet.ru and listen your music.\nTracks will scrobble in automatic way.');
+                                            self.addScrobbling();
                                         }
                                         else {
                                             lastFM.getSession(token, getSess);

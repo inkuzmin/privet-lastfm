@@ -6,7 +6,7 @@
   
     <em:id>privet2lastfm@inkuzmin.com</em:id>
     <em:name>Privet, Last.fm!</em:name>
-    <em:version>2.1</em:version>
+    <em:version>2.1.8</em:version>
     <em:description>Scrobbles tracks from privet.ru to last.fm</em:description>
     <em:creator>Ivan Kuzmin</em:creator>
     <em:type>2</em:type>

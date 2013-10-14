@@ -103,6 +103,17 @@ LastFM.prototype = {
 
 
     // },
+    touch: function (fn) {
+        var params = {
+            'method': 'user.getInfo',
+            'api_key': this.key,
+            'sk': this.sess
+        }
+        var str = ''
+        for (param in params)
+            str += param + '=' +  encodeURIComponent(params[param]) + '&';
+        this._sendXMLRequest(this.url, '?' + str + 'format=json&api_sig=' + this._generateSigKey(params), fn,  1);
+    },
     _test: function(a) {
         console.log(a);
     },
