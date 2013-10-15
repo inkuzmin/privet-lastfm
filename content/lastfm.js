@@ -131,5 +131,5 @@ LastFM.prototype = {
 
 }
 
-LastFM.KEY = '';
-LastFM.SECRET = '';
+LastFM.KEY = 'fda331bd32a488e53dfd0c58b9d7666b';
+LastFM.SECRET = 'a41991c9cd5cc97a7061c8f9d5f8aa13';

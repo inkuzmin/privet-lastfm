@@ -5,10 +5,7 @@ var privet2lastfm = function () {
     var scrobblingPercent = prefManager.getIntPref('extensions.privet2lastfm.scrobblingPercent');
     var browser;
 
-    var lastActivePlayer = null;
     var privetUser = '';
-
-    var tracks = [];
 
 //    function getFileURL(flashVars) {
 //        //  var flashVars = flashPlayer.getAttribute('flashvars');
@@ -29,191 +26,6 @@ var privet2lastfm = function () {
 //        style.href = 'chrome://privet2lastfm/skin/skin.css';
 //        d.head.appendChild(style);
 //    }
-
-
-    function Track(id, target) {
-        this.id = id;
-        this.target = target;
-        this.init();
-
-    }
-
-    Track.prototype = {
-        constructor: Track,
-        init: function () {
-            this.initSlots();
-            this.addTimeStart();
-            this.play = true;
-            this.getOtherFromNode();
-        },
-        initSlots: function () {
-            this.timestart = [];
-            this.timestop = [];
-            this.play = false;
-            this.duration = 0;
-            this.title = '';
-            this.artist = '';
-        },
-        addEventHandler: function (eventType, eventHandler) {
-            var self = this;
-            Observer.subscribe(eventType, eventHandler, self);
-        },
-
-        broadcast: function (eventType, data) {
-            data = data || null;
-            Observer.broadcast(eventType, data);
-        },
-        addTimeStart: function () {
-            var timestamp = new Date().getTime();
-            this.timestart.push(timestamp);
-
-        },
-        addTimeStop: function () {
-            // если первый таймстарт -- послать ласту запрос на обновление текущего трека
-            var timestamp = new Date().getTime();
-            this.timestop.push(timestamp);
-        },
-        getOtherFromNode: function () {
-            var self = this;
-            var node = self.getNode();
-            if (node) {
-                self.getOther(node);
-            }
-            else {
-                getXML(privetUser, function (xmlData) {
-                    node = self.getNode(xmlData);
-                    if (node) {
-                        self.getOther(node);
-                    }
-                })
-            }
-        },
-        getOther: function (node) {
-            var self = this;
-            self.title = self.getTitle(node);
-            self.artist = self.getArtist(node);
-            self.getDuration(node, function (duration) {
-                var a = [];
-                a[0] = self.artist;
-                a[1] = self.title;
-                a[2] = duration;
-                lastFMslot.updateNowPlaying(a);
-            });
-        },
-        getNode: function (xmlDB) {
-            // поискать в xmlSlot
-            // если нет, проверить адрес
-            //   если адрес соответствует юзернейму -- перезагрузить xmlSlot
-            //   если нет -- взять xmlSlot нового адреса
-            //     поискать в нем
-            //     если нет - увы
-            var self = this;
-
-            function getNodeById(ids) {
-                var i, len = ids.length;
-                for (i = 0; i < len; i += 1) {
-                    var id = ids[i];
-                    if (id.firstChild.nodeValue === self.id) {
-                        return id.parentNode;
-                    }
-                }
-                return false;
-            }
-
-            xmlDB = xmlDB || xmlSlot;
-
-            var doc = xmlDB.documentElement;
-            var ids = doc.getElementsByTagName('identifier');
-            var node = getNodeById(ids);
-            return node;
-
-        },
-        getTitle: function (node) {
-            // из getNode
-            return node.firstChild.firstChild.nodeValue;
-        },
-        getArtist: function (node) {
-            // из getNode
-            return node.lastChild.firstChild.nodeValue;
-        },
-        getDuration: function (node, fn) {
-            // взять путь из getNode
-            // получить заголовок, вычислить размер, как-то так:
-            /*
-             req.onreadystatechange = function() {
-             if (req.readyState === 4) {
-             if (req.status === 200)
-             req.getResponseHeader('Content-Length')
-             }
-             };
-             req.open('HEAD', url, true);
-             req.send(null);
-             */
-            // поделить на битрейт (128)
-            // получились секунды, записать.
-            var self = this;
-            var url = node.children[1].firstChild.nodeValue;
-            var xhr = new XMLHttpRequest();
-            xhr.onreadystatechange = function () {
-                if (xhr.readyState === 4) {
-                    if (xhr.status === 200)
-                        var duration = xhr.getResponseHeader('Content-Length');
-                    var sec = Math.floor((duration / 8 / 128000) * 60);
-                    self.duration = sec;
-                    fn(sec);
-                }
-            };
-            xhr.open('HEAD', url, true);
-            xhr.send(null);
-
-        },
-        toScrobbleOrNotToScrobble: function () {
-            var i, len = this.timestop.length;
-            var timestops = 0;
-            for (i = 0; i < len; i += 1) {
-                timestops += this.timestop[i];
-            }
-            var len = this.timestart.length;
-            var timestarts = 0;
-            for (i = 0; i < len; i += 1) {
-                timestarts += this.timestart[i];
-            }
-            var realDuration = timestops - timestarts;
-
-            console.log(realDuration)
-            console.log((scrobblingPercent * this.duration / 100))
-
-            if (realDuration > (scrobblingPercent * this.duration * 1000 / 100) && this.duration) {
-                console.log('SCROBBLE')
-                var a = [];
-                a[0] = this.artist;
-                a[1] = this.title;
-                lastFMslot.scrobble(a);
-            }
-            else {
-                console.log('DO NOT SCROBBLE')
-            }
-
-            // все таймстопы минус все таймстарты > scrobblingPercent * duration / 100, то скроблить, если нет, то увы
-        },
-        drop: function () {
-            // если состояние плей --
-            //   перевести в состояние стоп,
-            //   добавить таймстоп
-            //   вызвать тускроблорноттускробл
-            //   обнулить поля
-            // иначе
-            //   вызвать тускроблорноттускробл
-            //   обнулить поля
-
-            if (this.play) {
-                this.play = false;
-                this.addTimeStop();
-            }
-            this.toScrobbleOrNotToScrobble();
-        }
-    }
-
 
     var currentTrack = {
         id: null, // *
@@ -574,6 +386,9 @@ var privet2lastfm = function () {
         onPageLoad: function (aEvent) {
             var self = this;
 
+            self.currentTrack = Object.create(currentTrack);
+            self.lastActivePlayer = null;
+
             var d = aEvent.originalTarget; // doc is document that triggered the event
             var w = d.defaultView; // win is the window for the doc
             // test desired conditions and do something
@@ -582,6 +397,22 @@ var privet2lastfm = function () {
             // if (w.frameElement) return; // skip iframes/frames
             main();
             w.addEventListener('load', main, false);
+
+
+            if (d.location.href.match('privet.ru')) {
+                var additionalHeader = HTTPRequestObserver.register(d.location.href);
+    //            HTTPRequestObserver.unregister(additionalHeader);
+
+                self.addEventHandler('CALLBACK', function (e) {
+                    console.log('=================================');
+                    console.log(e);
+                    self.playEventPath(e);
+                });
+                w.addEventListener('unload', function (e) { // Close tab or change location
+                    self.leavePagePath(e);
+                    HTTPRequestObserver.unregister(additionalHeader);
+                }, false);
+            }
 
             function main() {
                 if (d.location.href.match('privet.ru')) {
@@ -633,13 +464,6 @@ var privet2lastfm = function () {
                             }, false);
                         }
                     }
-                    self.addEventHandler('PLAY', function (e) {
-//                        console.log(e);
-                        self.playEventPath(e);
-                    });
-                    w.addEventListener('unload', function (e) { // Close tab or change location
-                        self.leavePagePath(e);
-                    }, false);
                 }
 
             }
@@ -715,7 +539,7 @@ var privet2lastfm = function () {
             }
 
             function isTheSamePlayerClicked(e) {
-                if (currentTrack.target === e.target) {
+                if (self.currentTrack.target === e.target) {
 //                    console.log('SAMEEEEEEE PLAYER');
                     return true;
                 }
@@ -757,24 +581,25 @@ var privet2lastfm = function () {
 
 //            exceptionClick(e);
             if (clickWasUnderTheZone(e)) {
-                lastActivePlayer = e.target;
+                self.lastActivePlayer = e.target;
                 if (isTheSamePlayerClicked(e)) {
-                    if (currentTrack.play) {
-                        currentTrack.addTimeStop();
-                        currentTrack.play = false;
+                    if (self.currentTrack.play) {
+
+
+                        self.currentTrack.addTimeStop();
+                        self.currentTrack.play = false;
                     }
                     else {
-                        currentTrack.addTimeStart();
-                        currentTrack.play = true;
+                        self.currentTrack.addTimeStart();
+                        self.currentTrack.play = true;
                     }
                 }
                 else {
-                    currentTrack.drop();
-                    if (newIsMono(e.target)) {
-                        var id = getId(e.target);
-                        currentTrack.add(id, e.target);
-                    }
-
+                        self.currentTrack.drop();
+                        if (newIsMono(e.target)) {
+                            var id = getId(e.target);
+                            self.currentTrack.add(id, e.target);
+                        }
                 }
             }
         },
@@ -819,7 +644,7 @@ var privet2lastfm = function () {
 //            }
 
             function isTheSamePlayerClicked(e) {
-                if (currentTrack.target === e.target) {
+                if (self.currentTrack.target === e.target) {
 //                    console.log('SAMEEEEEEE PLAYER');
                     return true;
                 }
@@ -862,48 +687,66 @@ var privet2lastfm = function () {
 //            exceptionClick(e);
 
             if (isTheSamePlayerClicked(e)) {
-                if (currentTrack.play) {
-                    currentTrack.addTimeStop();
-                    currentTrack.play = false;
+                if (self.currentTrack.play) {
+                    self.currentTrack.addTimeStop();
+                    self.currentTrack.play = false;
                 }
                 else {
-                    currentTrack.addTimeStart();
-                    currentTrack.play = true;
+                    self.currentTrack.addTimeStart();
+                    self.currentTrack.play = true;
                 }
             }
             else {
-                currentTrack.drop();
+                self.currentTrack.drop();
                 if (newIsMono(e.target)) {
                     var id = getId(e.target);
-                    currentTrack.add(id, e.target);
+                    self.currentTrack.add(id, e.target);
                 }
 
             }
 
 
         },
-        playEventPath: function (e) {
+        playEventPath: function (e, d) {
             // другой ай ди?
             //   дроп старого ид
             //   добавление нового ид (с первым таймстартом)
+            var self = this;
 
             function isIdTheSame(e) {
-                if (e === currentTrack.id) {
+                if (e === self.currentTrack.id) {
                     return true;
                 }
                 return false;
             }
 
+            function getId(el) {
+                var id = el.id.substr(3);
+                console.log(id);
+                return id;
+
+            }
+
+            var node = self.d.getElementById('mj_' + e);
+
             if (!isIdTheSame(e)) {
-                currentTrack.drop();
-                currentTrack.add(e, lastActivePlayer);
+                if (node) {
+                    self.currentTrack.drop();
+                    self.currentTrack.add(e, node);
+                }
+                else {
+                    self.currentTrack.drop();
+                    self.currentTrack.add(e, self.lastActivePlayer);
+                }
             }
 
         },
         leavePagePath: function (e) {
             // дроп старого ид
+            var self = this;
 
-            currentTrack.drop();
+
+            self.currentTrack.drop();
         }
     }
 

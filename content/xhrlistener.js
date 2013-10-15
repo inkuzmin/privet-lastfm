@@ -1,59 +1,65 @@
 (function () {
+    var Cc = Components.classes;
+    var Ci = Components.interfaces;
+    var NS_SEEK_SET = Ci.nsISeekableStream.NS_SEEK_SET;
+    var observerService = Cc["@mozilla.org/observer-service;1"].getService(Ci.nsIObserverService);
 
-var  Cc = Components.classes;
-var  Ci = Components.interfaces;
-var NS_SEEK_SET = Ci.nsISeekableStream.NS_SEEK_SET;
-var observerService = Cc["@mozilla.org/observer-service;1"].getService(Ci.nsIObserverService);
 
+    var httpRequestObserver = {
+        observe: function (aSubject, aTopic, aData) {
+            if (aTopic == "http-on-examine-response") {
+                var newListener2 = new TracingListener();
+                aSubject.QueryInterface(Ci.nsITraceableChannel);
+                newListener2.originalListener = aSubject.setNewListener(newListener2);
+            }
+        },
+        QueryInterface: function (aIID) {
+            if (aIID.equals(Ci.nsIObserver) || aIID.equals(Ci.nsISupports)) {
+                return this;
+            }
 
-var httpRequestObserver = {
-    observe: function(aSubject, aTopic, aData) {
-        if (aTopic == "http-on-examine-response") {
-            var newListener = new TracingListener();
-            aSubject.QueryInterface(Ci.nsITraceableChannel);
-            newListener.originalListener = aSubject.setNewListener(newListener);
+            throw Components.results.NS_NOINTERFACE;
+
         }
-    },
-    QueryInterface : function (aIID) {
-        if (aIID.equals(Ci.nsIObserver) || aIID.equals(Ci.nsISupports)) {
-            return this;
-        }
+    };
 
-        throw Components.results.NS_NOINTERFACE;
 
+    function TracingListener() {
+        this.originalListener = null;
     }
-};
 
+    TracingListener.prototype = {
+        broadcast: function (eventType, data) {
+            data = data || null;
+            Observer.broadcast(eventType, data);
+        },
+        onDataAvailable: function (request, context, inputStream, offset, count) {
+            this.originalListener.onDataAvailable(request, context, inputStream, offset, count);
 
-function TracingListener() {
-    this.originalListener = null;
-}
-TracingListener.prototype = {
-    broadcast:function (eventType, data) {
-        var self = this;
-        data = data || null;
-        Observer.broadcast(eventType, data);
-    },
-    onDataAvailable: function(request, context, inputStream, offset, count) {
-        this.originalListener.onDataAvailable(request, context, inputStream, offset, count);
+        },
 
-    },
+        onStartRequest: function (request, context) {
+            this.originalListener.onStartRequest(request, context);
 
-    onStartRequest: function(request, context) {
-        this.originalListener.onStartRequest(request, context);
-
-        if (request && request.name === 'http://music.privet.ru/callback.php') {
+            if (request && request.name === 'http://music.privet.ru/callback.php') {
 //            try {
+
                 var text = this.readPostTextFromRequest(request, context);
-//                console.log(text);
+                var header = (request && request.getRequestHeader && request.getRequestHeader('X-Privet')) || null;
+
                 var pairs = text.split('&');
                 var i, len = pairs.length;
-                var start = false;
+                var type = null;
                 var id = null;
                 for (i = 0; i < len; i += 1) {
                     var pair = pairs[i].split('=');
                     if (pair[0] === 'state' && pair[1] === 'start') {
-                        start = true;
+                        if (pair[1] === 'start') {
+                            type = 'start';
+                        }
+                        else if (pair[1] === 'stop') {
+                            type = 'stop';
+                        }
                     }
                     if (pair[0] === 'id') {
                         id = pair[1];
@@ -61,39 +67,40 @@ TracingListener.prototype = {
 
                 }
 
-                if (start && id) {
-                    this.broadcast('PLAY', id);
+                if (type && id && header) {
+                    this.broadcast('CALLBACK', {
+                        id: id,
+                        type: type,
+                        from: header
+                    });
                 }
 //            }
 //            catch (err) {
 //                console.log(err)
 //            }
-        }
+            }
 
-    },
+        },
 
-    onStopRequest: function(request, context, statusCode) {
-        this.originalListener.onStopRequest(request, context, statusCode);
+        onStopRequest: function (request, context, statusCode) {
+            this.originalListener.onStopRequest(request, context, statusCode);
 
-    },
+        },
 
-    QueryInterface: function (aIID) {
-        if (aIID.equals(Ci.nsIStreamListener) ||
-            aIID.equals(Ci.nsISupports)) {
-            return this;
-        }
-        throw Components.results.NS_NOINTERFACE;
-    },
+        QueryInterface: function (aIID) {
+            if (aIID.equals(Ci.nsIStreamListener) ||
+                aIID.equals(Ci.nsISupports)) {
+                return this;
+            }
+            throw Components.results.NS_NOINTERFACE;
+        },
 
-    readPostTextFromRequest: function(request, context)
-    {
+        readPostTextFromRequest: function (request, context) {
             var is = request.QueryInterface(Ci.nsIUploadChannel).uploadStream;
-            if (is)
-            {
+            if (is) {
                 var ss = is.QueryInterface(Ci.nsISeekableStream);
                 var prevOffset;
-                if (ss)
-                {
+                if (ss) {
                     prevOffset = ss.tell();
                     ss.seek(NS_SEEK_SET, 0);
                 }
@@ -110,26 +117,48 @@ TracingListener.prototype = {
                 return text;
             }
 
-        return null;
+            return null;
+        },
+        readFromStream: function (stream, charset, noClose) {
+            var sis = Cc["@mozilla.org/binaryinputstream;1"].getService(Ci.nsIBinaryInputStream);
+            sis.setInputStream(stream);
+
+            var segments = [];
+            for (var count = stream.available(); count; count = stream.available())
+                segments.push(sis.readBytes(count));
+
+            if (!noClose)
+                sis.close();
+
+            var text = segments.join("");
+
+            return text;
+        }
+    }
+
+
+    observerService.addObserver(httpRequestObserver, "http-on-examine-response", false);
+})();
+
+var HTTPRequestObserver = {
+    observe: function (subject, topic, data) {
+        if (topic == "http-on-modify-request") {
+            var httpChannel = subject.QueryInterface(Ci.nsIHttpChannel);
+            httpChannel.setRequestHeader("X-Privet", this.header, false);
+        }
     },
-    readFromStream: function(stream, charset, noClose)
-    {
-        var sis = Cc["@mozilla.org/binaryinputstream;1"].getService(Ci.nsIBinaryInputStream);
-        sis.setInputStream(stream);
 
-        var segments = [];
-        for (var count = stream.available(); count; count = stream.available())
-            segments.push(sis.readBytes(count));
+    get observerService() {
+        return Cc["@mozilla.org/observer-service;1"].getService(Ci.nsIObserverService);
+    },
 
-        if (!noClose)
-            sis.close();
+    register: function (header) {
+        this.observerService.addObserver(this, "http-on-modify-request", false);
+        this.header = header;
+        return this;
+    },
 
-        var text = segments.join("");
-
-        return text;
+    unregister: function (that) {
+        this.observerService.removeObserver(that, "http-on-modify-request");
     }
 }
-
-
-observerService.addObserver(httpRequestObserver, "http-on-examine-response", false);
-})();
