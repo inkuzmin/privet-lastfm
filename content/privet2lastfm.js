@@ -4,29 +4,441 @@ var privet2lastfm = function () {
 
     var xmlSlot = {};
     var lastFMslot;
-
     var privetUser = '';
+    var playlists = [];
+
+
+    function TrackList() {
+        this.list = [];
+        this.id = Math.random();
+    }
+
+    TrackList.prototype = {
+        constructor: TrackList,
+        add: function (track) {
+            return this.list.push(track);
+        },
+        getTop: function () {
+            return this.list[this.list.length - 1];
+        },
+        topToBottom: function () {
+            this.list.unshift(this.list.pop());
+        },
+        toTop: function (track) {
+            var track = this.removeTrack(track);
+            this.list.push(track);
+        },
+        toBottom: function (track) {
+            var track = this.removeTrack(track);
+            this.list.unshift(track);
+        },
+        reach: function (fn) {
+            for (var i = this.list.length; --i;) {
+                if (fn(this.list[i])) return;
+            }
+        },
+        each: function (fn) {
+            var i, len = this.list.length;
+            for (i = 0; i < len; i += 1) {
+                if (fn(this.list[i])) return;
+            }
+        },
+        getById: function (id) {
+            var i, len = this.list.length;
+            for (i = 0; i < len; i += 1) {
+                var track = this.list[i];
+                if (track.id === id) {
+                    return track;
+                }
+            }
+            return false;
+        },
+        removeById: function (id) {
+            var i, len = this.list.length;
+            for (i = 0; i < len; i += 1) {
+                var track = this.list[i];
+                if (track.id === id) {
+                    return this.list.splice(i, 1)[0];
+                }
+            }
+        },
+        removeTrack: function (track) {
+            return this.removeById(track.id);
+        }
+
+
+    }
+    var tracks = new TrackList();
+
+
+    function Page(doc) {
+        this.d = doc;
+        this.init();
+    }
+
+    Page.prototype = {
+        constructor: Page,
+        init: function () {
+            this.initSlots();
+            this.bindCommonHandlers();
+            this.bindPrivetHandlers();
+
+        },
+        initSlots: function () {
+            this.tracks = new TrackList();
+            this.w = this.d.defaultView;
+            this.location = this.d.location.href;
+            this.additionalHeaderAdder = null;
+        },
+        addEventHandler: function (eventType, eventHandler) {
+            var self = this;
+            Observer.subscribe(eventType, eventHandler, self);
+        },
+        removeEventHandler: function (eventType, eventHandler) {
+            var self = this;
+            Observer.unsubscribe(eventType, eventHandler, self);
+        },
+
+        broadcast: function (eventType, data) {
+            data = data || null;
+            Observer.broadcast(eventType, data);
+        },
+        bindCommonHandlers: function () {
+            var self = this;
+            self.additionalHeaderAdder = HTTPRequestObserver.register(self.location);
+
+            function playEventPath(data) {
+                console.log(self.location, data.from);
+                if (self.location === data.from) {
+                    console.log(data);
+                    self.playEventPath(data);
+                }
+            }
+
+            self.addEventHandler('CALLBACK', playEventPath);
+
+            self.w.addEventListener('unload', function (e) { // Close tab or change location
+                HTTPRequestObserver.unregister(self.additionalHeaderAdder);
+                self.removeEventHandler('CALLBACK', playEventPath);
+                self.leavePagePath(e);
+            }, false);
+
+        },
+        bindPrivetHandlers: function () {
+            var self = this;
+            main();
+            this.w.addEventListener('load', main, false); // one more for lacked players
+
+            function main() {
+                if (self.location.match('music.privet.ru')) {
+
+                    var urlArray = self.location.split('/');
+                    var j, l = urlArray.length;
+                    for (j = 0; j < l; j += 1) {
+                        if (urlArray[j] === 'user') {
+                            privetUser = urlArray[j + 1];
+                            break;
+                        }
+                    }
+                    var flashPlayers = self.d.getElementsByTagName('embed');
+
+                    var len = flashPlayers.length,
+                        i;
+
+                    for (i = 0; i < len; i += 1) {
+                        var flashPlayer = flashPlayers[i];
+
+                        if (flashPlayer.getAttribute('wmode') !== 'transparent') {
+                            var id = flashPlayer.id;
+
+                            flashPlayer.setAttribute('wmode', 'transparent');
+
+
+                            var temp = flashPlayer.parentNode.innerHTML;
+                            flashPlayer.parentNode.innerHTML = temp + '•';
+
+                            flashPlayer = self.d.getElementById(id);
+
+
+                            flashPlayer.parentNode.addEventListener('mousedown', function (e) {
+                                self.embedClickPath(e);
+                            }, false);
+
+                            flashPlayer.parentNode.addEventListener('keydown', function (e) {
+                                self.embedSpacePressPath(e);
+                            }, false);
+                        }
+                    }
+                }
+
+            }
+        },
+        _getPlayerByClickedNode: function (node) {
+            var self = this;
+
+            var id = getTrackId(node);
+            var i, len = self.tracks.length;
+            for (i = 0; i < len; i += 1) {
+                var track = self.tracks[i];
+                if (track.id === id) {
+                    return track;
+                }
+            }
+            var track = new Track(id, node);
+            return track;
+        },
+        _getPlayerById: function (id) {
+            var self = this;
+
+            var i, len = self.tracks.length;
+            for (i = 0; i < len; i += 1) {
+                var track = self.tracks[i];
+                if (track.id === id) {
+                    return track;
+                }
+            }
+            return false;
+        },
+        _isEqualizer: function (flashVars) {
+            flashVars = flashVars.split('&');
+            var len = flashVars.length,
+                j;
+            for (j = 0; j < len; j += 1) {
+                var flashVarPair = flashVars[j].split('=');
+                if (flashVarPair[0] === 'showeq') return flashVarPair[1];
+            }
+            return false;
+        },
+
+        _clickWasUnderTheZone: function (e) {
+            var node = e.target;
+            var flashVars = node.getAttribute('flashvars');
+            var rectObject = node.getBoundingClientRect();
+            var clickX = e.clientX;
+            var clickY = e.clientY;
+            if (this._isEqualizer(flashVars)) {
+                if (clickX > rectObject.left + 1 && clickX < rectObject.left + rectObject.width &&
+                    clickY > rectObject.top && clickY < rectObject.top + 61) {
+                    return true;
+                }
+                else if (clickX > rectObject.left + 1 && clickX < rectObject.left + 18 &&
+                    clickY > rectObject.top + 61 && clickY < rectObject.top + 81) {
+                    return true;
+                }
+            }
+            else {
+                if (clickX > rectObject.left && clickX < rectObject.left + 18 &&
+                    clickY > rectObject.top && clickY < rectObject.top + 20) {
+                    return true;
+                }
+            }
+            return false;
+        },
+        _getTrackIdByNode: function (node) {
+            var id = node.id.substr(3);
+            return id;
+        },
+        _getNodeByTrackId: function (id) {
+            var node = this.d.getElementById('mj_' + id);
+            return node;
+        },
+        _getFileURL: function (flashVars) {
+            flashVars = flashVars.split('&');
+            var len = flashVars.length,
+                j;
+            for (j = 0; j < len; j += 1) {
+                var flashVarPair = flashVars[j].split('=');
+                if (flashVarPair[0] === 'file') return flashVarPair[1];
+            }
+            return -1;
+        },
+        _isPlayerMono: function (node) {
+            var flashVars = node.getAttribute('flashvars');
+            var fileName = getFileURL(flashVars);
+            if (fileName.substr(-3, 3) === 'xml') {
+                return false;
+            }
+            return true;
+        },
+
+        magicWithTrackAndList: function (track) {
+//            track.play = false;
+            console.log('MAGIC');
+            var self = this;
+            if (track.play) {
+                track.play = false;
+                track.addTimeStop();
+                tracks.toBottom(track);
+                tracks.reach(function (track) {
+                    if (track.play) {
+                        track.updateNowPlaying();
+                        return true;
+                    }
+                    return false;
+                })
+
+            } else {
+                track.play = true;
+                track.addTimeStart();
+                self.tracks.each(function (track) {
+                    track.toScrobbleOrNotToScrobble();
+                });
+                tracks.toTop(track);
+                track.updateNowPlaying();
+            }
+
+        },
+        embedPath: function (node) {
+            var self = this;
+            var id = self._getTrackIdByNode(node);
+            var track = self.tracks.getById(id);
+
+
+            if (track) {
+                self.magicWithTrackAndList(track);
+            }
+            else {
+                var nodeId = self._getNodeByTrackId(id).id;
+                if (id === nodeId) {
+                    track = new Track(id, node);
+                    if (self.location.match('playlist')) {
+                        var urlArray = self.location.split('/');
+                        var j, l = urlArray.length;
+                        for (j = 0; j < l; j += 1) {
+                            if (urlArray[j] === 'playlist') {
+                                var playlistid = urlArray[j + 1];
+                                break;
+                            }
+                        }
+                        track.setPlaylistID(playlistid);
+                    }
+                    track.init();
+                } else {
+                    track = new Track(0, node); // tracks with 0 as id are the mocks
+                }
+                self.tracks.add(track);
+                tracks.add(track);
+            }
+        },
+
+        embedClickPath: function (e) {
+            var self = this;
+
+            if (self._clickWasUnderTheZone(e)) {
+                self.embedPath(e.target);
+            }
+        },
+        embedSpacePressPath: function (e) {
+            this.embedPath(e.target);
+        },
+        playEventPath: function (data) {
+            var self = this;
+            var id = data.id;
+            var track = self.tracks.getById(data.id);
+
+            if (data.type === 'start') {
+                if (track === false) {
+                    track = self.tracks.getById(0);
+                    if (track) {
+                        track.setId(id);
+                        if (self.location.match('playlist')) {
+                            var urlArray = self.location.split('/');
+                            var j, l = urlArray.length;
+                            for (j = 0; j < l; j += 1) {
+                                if (urlArray[j] === 'playlist') {
+                                    var playlistid = urlArray[j + 1];
+                                    break;
+                                }
+                            }
+                            track.setPlaylistID(playlistid);
+                        }
+                        track.init();
+                    }
+                    else {
+                        var node = self._getNodeByTrackId(id);
+                        track = new Track(id, node);
+                        if (self.location.match('playlist')) {
+                            var urlArray = self.location.split('/');
+                            var j, l = urlArray.length;
+                            for (j = 0; j < l; j += 1) {
+                                if (urlArray[j] === 'playlist') {
+                                    var playlistid = urlArray[j + 1];
+                                    break;
+                                }
+                            }
+                            track.setPlaylistID(playlistid);
+                        }
+                        track.init();
+                        self.tracks.add(track);
+                        tracks.add(track);
+                    }
+                }
+                if (track && track.play === undefined) {
+                    self.magicWithTrackAndList(track);
+                }
+                else {
+                    console.log('Do nothing...');
+//                    track.updateNowPlaying();
+                }
+
+            }
+            else if (data.type === 'stop') {
+                if (track) {
+                    track.listenTime = data.duration;
+                    track.toScrobbleOrNotToScrobble();
+                    tracks.removeTrack(track);
+                    self.tracks.removeTrack(track);
+                }
+
+            }
+        },
+        leavePagePath: function (e) {
+            var self = this;
+            self.tracks.each(function (track) {
+                track.toScrobbleOrNotToScrobble();
+                tracks.removeTrack(track);
+            });
+            tracks.reach(function (track) {
+                if (track.play) {
+                    track.updateNowPlaying();
+                    return true;
+                }
+                return false;
+            })
+            self.tracks = undefined;
+        }
+
+    }
+
 
     function Track(id, target) {
         this.id = id;
         this.target = target;
-        this.init();
+        this.initSlots();
     }
 
     Track.prototype = {
         constructor: Track,
         init: function () {
-            this.initSlots();
+            this.play = true;
             this.addTimeStart();
             this.getOtherFromNode();
+        },
+        setId: function (id) {
+            this.id = id;
+        },
+        setPlaylistID: function (plid) {
+            this.playlist = plid;
         },
         initSlots: function () {
             this.timestart = [];
             this.timestop = [];
-            this.play = false;
+            this.play;
             this.duration = 0;
+            this.listenTime = null;
             this.title = '';
             this.artist = '';
+            this.playlist;
         },
         addEventHandler: function (eventType, eventHandler) {
             var self = this;
@@ -48,17 +460,30 @@ var privet2lastfm = function () {
         },
         getOtherFromNode: function () {
             var self = this;
-            var node = self.getNode();
-            if (node) {
-                self.getOther(node);
-            }
-            else {
-                getXML(privetUser, function (xmlData) {
+            var node;
+
+            if (self.playlist) {
+                getXML(self.playlist, function (xmlData) {
                     node = self.getNode(xmlData);
                     if (node) {
                         self.getOther(node);
                     }
-                })
+                }, true);
+            }
+            else {
+
+                node = self.getNode();
+                if (node) {
+                    self.getOther(node);
+                }
+                else {
+                    getXML(privetUser, function (xmlData) {
+                        node = self.getNode(xmlData);
+                        if (node) {
+                            self.getOther(node);
+                        }
+                    })
+                }
             }
         },
         getOther: function (node) {
@@ -75,6 +500,7 @@ var privet2lastfm = function () {
         },
         getNode: function (xmlDB) {
             var self = this;
+
 
             function getNodeById(ids) {
                 var i, len = ids.length;
@@ -116,23 +542,29 @@ var privet2lastfm = function () {
             };
             xhr.open('HEAD', url, true);
             xhr.send(null);
-
         },
         toScrobbleOrNotToScrobble: function () {
-            var i, len = this.timestop.length;
-            var timestops = 0;
-            for (i = 0; i < len; i += 1) {
-                timestops += this.timestop[i];
+            var self = this;
+            var realDuration;
+
+            if (self.listenTime) {
+                realDuration = self.listenTime * 1000;
+            } else {
+                var i, len = this.timestop.length;
+                var timestops = 0;
+                for (i = 0; i < len; i += 1) {
+                    timestops += this.timestop[i];
+                }
+                var len = this.timestart.length;
+                var timestarts = 0;
+                for (i = 0; i < len; i += 1) {
+                    timestarts += this.timestart[i];
+                }
+                realDuration = timestops - timestarts;
             }
-            var len = this.timestart.length;
-            var timestarts = 0;
-            for (i = 0; i < len; i += 1) {
-                timestarts += this.timestart[i];
-            }
-            var realDuration = timestops - timestarts;
 
             console.log(realDuration)
-            console.log((scrobblingPercent * this.duration / 100))
+            console.log((scrobblingPercent * this.duration * 1000 / 100))
 
             if (realDuration > (scrobblingPercent * this.duration * 1000 / 100) && this.duration) {
                 console.log('SCROBBLE')
@@ -145,6 +577,13 @@ var privet2lastfm = function () {
                 console.log('DO NOT SCROBBLE')
             }
         },
+        updateNowPlaying: function () {
+            var a = [];
+            a[0] = this.artist;
+            a[1] = this.title;
+            a[2] = this.duration;
+            lastFMslot.updateNowPlaying(a);
+        },
         drop: function () {
             if (this.play) {
                 this.play = false;
@@ -154,117 +593,52 @@ var privet2lastfm = function () {
         }
     }
 
-    function isEqualizer(flashVars) {
-        //  var flashVars = flashPlayer.getAttribute('flashvars');
-        flashVars = flashVars.split('&');
-        var len = flashVars.length,
-            j;
-        for (j = 0; j < len; j += 1) {
-            var flashVarPair = flashVars[j].split('=');
-            if (flashVarPair[0] === 'showeq') return flashVarPair[1];
-        }
-        return false;
-    }
 
-    function clickWasUnderTheZone(e) {
-        var node = e.target;
-        var flashVars = node.getAttribute('flashvars');
-        var rectObject = node.getBoundingClientRect();
-        var clickX = e.clientX;
-        var clickY = e.clientY;
-        if (isEqualizer(flashVars)) {
-            if (clickX > rectObject.left + 1 && clickX < rectObject.left + rectObject.width &&
-                clickY > rectObject.top && clickY < rectObject.top + 61) {
-                return true;
+    function getXML(username, fn, playlistp) {
+
+        if (playlistp) {
+            var url = 'http://music.privet.ru/music-play-playlist/XSPF/' + username + '.xml';
+            var xhr = new XMLHttpRequest();
+            xhr.onload = function () {
+                xml = this.responseXML;
+                fn(xml);
             }
-            else if (clickX > rectObject.left + 1 && clickX < rectObject.left + 18 &&
-                clickY > rectObject.top + 61 && clickY < rectObject.top + 81) {
-                return true;
-            }
+            xhr.open('GET', url, true);
+            xhr.send();
         }
         else {
-            if (clickX > rectObject.left && clickX < rectObject.left + 18 &&
-                clickY > rectObject.top && clickY < rectObject.top + 20) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    function isTheSamePlayerClicked(e) {
-        if (currentTrack.target === e.target) {
-            return true;
-        }
-        return false;
-    }
-
-
-    function getFileURL(flashVars) {
-        flashVars = flashVars.split('&');
-        var len = flashVars.length,
-            j;
-        for (j = 0; j < len; j += 1) {
-            var flashVarPair = flashVars[j].split('=');
-            if (flashVarPair[0] === 'file') return flashVarPair[1];
-        }
-        return -1;
-    }
-
-    function newIsMono(el) {
-        var node = el;
-        var flashVars = node.getAttribute('flashvars');
-        var fileName = getFileURL(flashVars);
-        if (fileName.substr(-3, 3) === 'xml') {
-            return false;
-        }
-        return true;
-    }
-
-    function getTrackId(el) {
-        var id = el.id.substr(3);
-        console.log(id);
-        return id;
-    }
-
-    function isIdTheSame(e) {
-        if (e === currentTrack.id) {
-            return true;
-        }
-        return false;
-    }
-
-    function getXML(username, fn) {
-        var xml, url, xhr = new XMLHttpRequest();
-        xhr.onload = function () {
-            var responseDoc = this.responseXML;
-            var pid = getId(responseDoc);
-
-            if (pid !== -1) {
-                url = 'http://music.privet.ru/music-play-service/XSPF/' + pid.substr(3) + '.xml';
-
-                var xhr = new XMLHttpRequest();
-                xhr.onload = function () {
-                    xml = this.responseXML;
-                    fn(xml);
+            function getId(d) {
+                var pNodes = d.getElementsByTagName('p');
+                var i, len = pNodes.length;
+                for (i = 0; i < len; i += 1) {
+                    var id = pNodes[i].id;
+                    if (id) return id;
                 }
-                xhr.open('GET', url, true);
-                xhr.send();
+                return -1;
             }
-        }
 
-        xhr.open('GET', 'http://music.privet.ru/user/' + username + '/play', true);
-        xhr.responseType = 'document';
-        xhr.send();
-    }
+            var xml, url, xhr = new XMLHttpRequest();
+            xhr.onload = function () {
+                var responseDoc = this.responseXML;
+                var pid = getId(responseDoc);
 
-    function getId(d) {
-        var pNodes = d.getElementsByTagName('p');
-        var i, len = pNodes.length;
-        for (i = 0; i < len; i += 1) {
-            var id = pNodes[i].id;
-            if (id) return id;
+                if (pid !== -1) {
+                    url = 'http://music.privet.ru/music-play-service/XSPF/' + pid.substr(3) + '.xml';
+
+                    var xhr = new XMLHttpRequest();
+                    xhr.onload = function () {
+                        xml = this.responseXML;
+                        fn(xml);
+                    }
+                    xhr.open('GET', url, true);
+                    xhr.send();
+                }
+            }
+
+            xhr.open('GET', 'http://music.privet.ru/user/' + username + '/play', true);
+            xhr.responseType = 'document';
+            xhr.send();
         }
-        return -1;
     }
 
     return {
@@ -275,15 +649,6 @@ var privet2lastfm = function () {
             }, false);
         },
 
-        addEventHandler: function (eventType, eventHandler) {
-            var self = this;
-            Observer.subscribe(eventType, eventHandler, self);
-        },
-
-        broadcast: function (eventType, data) {
-            data = data || null;
-            Observer.broadcast(eventType, data);
-        },
         tryLastFMsess: function () {
 //            prefManager.setCharPref('extensions.privet2lastfm.lastfmSess', '');
         },
@@ -363,153 +728,9 @@ var privet2lastfm = function () {
             scrobblingPercent = prefManager.getIntPref('extensions.privet2lastfm.scrobblingPercent');
         },
         onPageLoad: function (aEvent) {
-            var self = this;
-
-
-            self.tracks = [];
-
-            self.currentTrack = Object.create(currentTrack);
-            self.lastActivePlayer = null;
-
-            var d = aEvent.originalTarget; // doc is document that triggered the event
-            var w = d.defaultView; // win is the window for the doc
-            // test desired conditions and do something
-            // if (d.nodeName == "#document") return; // only documents
-            // if (w != w.top) return; //only top window.
-            // if (w.frameElement) return; // skip iframes/frames
-            main();
-            w.addEventListener('load', main, false);
-
-
-            if (d.location.href.match('privet.ru')) {
-                var additionalHeader = HTTPRequestObserver.register(d.location.href);
-    //            HTTPRequestObserver.unregister(additionalHeader);
-
-                self.addEventHandler('CALLBACK', function (e) {
-                    console.log('=================================');
-                    console.log(e);
-                    self.playEventPath(e);
-                });
-                w.addEventListener('unload', function (e) { // Close tab or change location
-                    self.leavePagePath(e);
-                    HTTPRequestObserver.unregister(additionalHeader);
-                }, false);
-            }
-
-            function main() {
-                if (d.location.href.match('privet.ru')) {
-
-                    var urlArray = d.location.href.split('/');
-                    var j, l = urlArray.length;
-                    for (j = 0; j < l; j += 1) {
-                        if (urlArray[j] === 'user') {
-                            privetUser = urlArray[j + 1];
-                            break;
-                        }
-                    }
-                    var flashPlayers = d.getElementsByTagName('embed');
-
-                    var len = flashPlayers.length,
-                        i;
-
-                    for (i = 0; i < len; i += 1) {
-                        var flashPlayer = flashPlayers[i];
-
-                        if (flashPlayer.getAttribute('wmode') !== 'transparent') {
-                            var id = flashPlayer.id;
-
-                            flashPlayer.setAttribute('wmode', 'transparent');
-
-
-                            var temp = flashPlayer.parentNode.innerHTML;
-                            flashPlayer.parentNode.innerHTML = temp + '•';
-
-                            flashPlayer = d.getElementById(id);
-
-
-                            flashPlayer.parentNode.addEventListener('mousedown', function (e) {
-                                self.embedClickPath(e);
-                            }, false);
-
-                            flashPlayer.parentNode.addEventListener('keydown', function (e) {
-                                self.embedSpacePressPath(e);
-                            }, false);
-                        }
-                    }
-                }
-
-            }
-
-        },
-        _getPlayerByClickedNode: function (node) {
-            var self = this;
-
-            var id = getTrackId(node);
-            var i, len = self.tracks.length;
-            for (i = 0; i < len; i += 1) {
-                var track = self.tracks[i];
-                if (track.id === id) {
-                    return track;
-                }
-            }
-            var track = new Track(id, node);
-            return track;
-        },
-        _getPlayerById: function (id) {
-            var self = this;
-
-            var i, len = self.tracks.length;
-            for (i = 0; i < len; i += 1) {
-                var track = self.tracks[i];
-                if (track.id === id) {
-                    return track;
-                }
-            }
-            return false;
-        },
-        embedClickPath: function (e) {
-            var self = this;
-
-            if (clickWasUnderTheZone(e)) {
-                lastActivePlayer = e.target;
-                var track = self._getPlayerByClickedNode(e.target);
-                self.tracks.push(track);
-                if (track.play) {
-                    track.addTimeStop();
-                    track.play = false;
-                }
-                else {
-                    track.addTimeStart();
-                    track.play = true;
-                }
-            }
-        },
-        embedSpacePressPath: function (e) {
-            var self = this;
-            var track = self._getPlayerByClickedNode(e.target);
-            self.tracks.push(track);
-            if (track.play) {
-                track.addTimeStop();
-                track.play = false;
-            }
-            else {
-                track.addTimeStart();
-                track.play = true;
-            }
-        },
-        playEventPath: function (id) {
-            var self = this;
-            var track = self._getPlayerById(id);
-            if (!track) {
-                track = new Track(getTrackId(lastActivePlayer), lastActivePlayer);
-                self.tracks.push(track);
-            }
-        },
-        leavePagePath: function (e) {
-            currentTrack.drop();
+            var page = new Page(aEvent.originalTarget);
         }
     }
-
 }();
 
 window.addEventListener('load', function load() {

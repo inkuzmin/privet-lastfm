@@ -49,35 +49,32 @@
 
                 var pairs = text.split('&');
                 var i, len = pairs.length;
-                var type = null;
-                var id = null;
+                var type, id, duration;
                 for (i = 0; i < len; i += 1) {
                     var pair = pairs[i].split('=');
-                    if (pair[0] === 'state' && pair[1] === 'start') {
-                        if (pair[1] === 'start') {
-                            type = 'start';
-                        }
-                        else if (pair[1] === 'stop') {
-                            type = 'stop';
-                        }
+                    console.log(pair)
+                    switch (pair[0]) {
+                        case 'state':
+                            type = pair[1];
+                            break;
+                        case 'id':
+                            id = pair[1];
+                            break;
+                        default:
+                            if (pair[0].indexOf('duration') > -1)
+                                duration = pair[1];
                     }
-                    if (pair[0] === 'id') {
-                        id = pair[1];
-                    }
-
                 }
+
 
                 if (type && id && header) {
                     this.broadcast('CALLBACK', {
                         id: id,
                         type: type,
-                        from: header
+                        from: header,
+                        duration: duration
                     });
                 }
-//            }
-//            catch (err) {
-//                console.log(err)
-//            }
             }
 
         },
@@ -144,7 +141,11 @@ var HTTPRequestObserver = {
     observe: function (subject, topic, data) {
         if (topic == "http-on-modify-request") {
             var httpChannel = subject.QueryInterface(Ci.nsIHttpChannel);
-            httpChannel.setRequestHeader("X-Privet", this.header, false);
+            var url = subject.URI.spec;
+            if (url === 'http://music.privet.ru/callback.php') {
+                httpChannel.setRequestHeader("X-Privet", this.header, false);
+            }
+
         }
     },
 
