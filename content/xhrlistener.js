@@ -52,7 +52,6 @@
                 var type, id, duration;
                 for (i = 0; i < len; i += 1) {
                     var pair = pairs[i].split('=');
-                    console.log(pair)
                     switch (pair[0]) {
                         case 'state':
                             type = pair[1];

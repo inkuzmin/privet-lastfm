@@ -1,3 +1,4 @@
+var tracks;
 var privet2lastfm = function () {
     var prefManager = Components.classes["@mozilla.org/preferences-service;1"].getService(Components.interfaces.nsIPrefBranch);
     var scrobblingPercent = prefManager.getIntPref('extensions.privet2lastfm.scrobblingPercent');
@@ -61,6 +62,7 @@ var privet2lastfm = function () {
                     return this.list.splice(i, 1)[0];
                 }
             }
+            return false;
         },
         removeTrack: function (track) {
             return this.removeById(track.id);
@@ -68,7 +70,7 @@ var privet2lastfm = function () {
 
 
     }
-    var tracks = new TrackList();
+    tracks = new TrackList();
 
 
     function Page(doc) {
@@ -108,9 +110,7 @@ var privet2lastfm = function () {
             self.additionalHeaderAdder = HTTPRequestObserver.register(self.location);
 
             function playEventPath(data) {
-                console.log(self.location, data.from);
                 if (self.location === data.from) {
-                    console.log(data);
                     self.playEventPath(data);
                 }
             }
@@ -264,38 +264,41 @@ var privet2lastfm = function () {
         toggle: function (track) {
             var self = this;
             if (track.play) {
-                self.play(track);
-            } else {
                 self.pause(track);
+            } else {
+                self.play(track);
             }
 
         },
-        play: function (track) {
-            track.play = false;
-            track.addTimeStop();
-            tracks.toBottom(track);
-            tracks.reach(function (track) {
-                console.log(track.title + ' = ' + track.play)
-                if (track.play) {
-                    track.updateNowPlaying();
-                    return true;
-                }
-                return false;
-            })
-        },
         pause: function (track) {
-            var self = this;
-            track.play = true;
-            track.addTimeStart();
-            self.tracks.each(function (track) {
-                track.toScrobbleOrNotToScrobble();
-            });
-            tracks.toTop(track);
-            track.updateNowPlaying();
+            if (track.play) {
+                track.play = false;
+                track.addTimeStop();
+                tracks.toBottom(track);
+                tracks.reach(function (track) {
+                    if (track.play) {
+                        track.updateNowPlaying();
+                        return true;
+                    }
+                    return false;
+                })
+            }
         },
-        stop: function (track) {
+        play: function (track) {
+            if (!track.play) {
+                var self = this;
+                track.play = true;
+                track.addTimeStart();
+                self.tracks.each(function (track) {
+                    track.toScrobbleOrNotToScrobble();
+                });
+                tracks.toTop(track);
+                track.updateNowPlaying();
+            }
+        },
+        stop: function (track, listenTime) {
             var self = this;
-            track.listenTime = data.duration;
+            track.listenTime = listenTime;
             track.toScrobbleOrNotToScrobble();
             tracks.removeTrack(track);
             self.tracks.removeTrack(track);
@@ -312,27 +315,18 @@ var privet2lastfm = function () {
             else {
                 var nodeById = self._getNodeByTrackId(id);
                 if (node === nodeById) {
-                    console.log('PATH #1');
                     track = new Track(id, node);
-                    if (self.location.match('playlist')) {
-                        var urlArray = self.location.split('/');
-                        var j, l = urlArray.length;
-                        for (j = 0; j < l; j += 1) {
-                            if (urlArray[j] === 'playlist') {
-                                var playlistid = urlArray[j + 1];
-                                break;
-                            }
-                        }
-                        track.setPlaylistID(playlistid);
-                    }
+
                     track.init();
+                    self.tracks.add(track);
+                    tracks.add(track);
+
                     self.play(track);
                 } else {
-                    console.log('PATH #2');
                     track = new Track(0, node); // tracks with 0 as id are the mocks
+                    self.tracks.add(track);
+                    tracks.add(track);
                 }
-                self.tracks.add(track);
-                tracks.add(track);
             }
         },
 
@@ -344,6 +338,7 @@ var privet2lastfm = function () {
             }
         },
         embedSpacePressPath: function (e) {
+
             this.embedPath(e.target);
         },
         playEventPath: function (data) {
@@ -356,17 +351,7 @@ var privet2lastfm = function () {
                     track = self.tracks.getById(0);
                     if (track) {
                         track.setId(id);
-                        if (self.location.match('playlist')) {
-                            var urlArray = self.location.split('/');
-                            var j, l = urlArray.length;
-                            for (j = 0; j < l; j += 1) {
-                                if (urlArray[j] === 'playlist') {
-                                    var playlistid = urlArray[j + 1];
-                                    break;
-                                }
-                            }
-                            track.setPlaylistID(playlistid);
-                        }
+
                         track.init();
                     }
                     else {
@@ -389,25 +374,24 @@ var privet2lastfm = function () {
                     }
                 }
                 if (track && track.play === undefined) {
-                    self.toggle(track);
+                    self.play(track);
                 }
                 else {
-                    console.log('Do nothing...');
 //                    track.updateNowPlaying();
                 }
 
             }
             else if (data.type === 'stop') {
                 if (track) {
-                    self.stop(track);
+                    self.stop(track, data.duration);
                 }
 
             }
         },
-        leavePagePath: function (e) {
+        leavePagePath: function () {
             var self = this;
             self.tracks.each(function (track) {
-                track.toScrobbleOrNotToScrobble();
+                track.drop();
                 tracks.removeTrack(track);
             });
             tracks.reach(function (track) {
@@ -432,7 +416,6 @@ var privet2lastfm = function () {
     Track.prototype = {
         constructor: Track,
         init: function () {
-            this.addTimeStart();
             this.getOtherFromNode();
         },
         setId: function (id) {
@@ -502,11 +485,12 @@ var privet2lastfm = function () {
             self.title = self.getTitle(node);
             self.artist = self.getArtist(node);
             self.getDuration(node, function (duration) {
-                var a = [];
-                a[0] = self.artist;
-                a[1] = self.title;
-                a[2] = duration;
-                lastFMslot.updateNowPlaying(a);
+//                var a = [];
+//                a[0] = self.artist;
+//                a[1] = self.title;
+//                a[2] = duration;
+//                lastFMslot.updateNowPlaying(a);
+                console.log('DURATION INIT');
             });
         },
         getNode: function (xmlDB) {
@@ -573,6 +557,11 @@ var privet2lastfm = function () {
                 }
                 realDuration = timestops - timestarts;
             }
+
+            console.log('track: ' + self.title + ' | listened time: ' + realDuration + ' and duration: ' + this.duration);
+
+            console.log(this.timestart);
+            console.log(this.timestop);
 
             if (realDuration > (scrobblingPercent * this.duration * 1000 / 100) && this.duration) {
                 console.log('SCROBBLE')
