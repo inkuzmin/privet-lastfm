@@ -261,32 +261,44 @@ var privet2lastfm = function () {
             return true;
         },
 
-        magicWithTrackAndList: function (track) {
-//            track.play = false;
-            console.log('MAGIC');
+        toggle: function (track) {
             var self = this;
             if (track.play) {
-                track.play = false;
-                track.addTimeStop();
-                tracks.toBottom(track);
-                tracks.reach(function (track) {
-                    if (track.play) {
-                        track.updateNowPlaying();
-                        return true;
-                    }
-                    return false;
-                })
-
+                self.play(track);
             } else {
-                track.play = true;
-                track.addTimeStart();
-                self.tracks.each(function (track) {
-                    track.toScrobbleOrNotToScrobble();
-                });
-                tracks.toTop(track);
-                track.updateNowPlaying();
+                self.pause(track);
             }
 
+        },
+        play: function (track) {
+            track.play = false;
+            track.addTimeStop();
+            tracks.toBottom(track);
+            tracks.reach(function (track) {
+                console.log(track.title + ' = ' + track.play)
+                if (track.play) {
+                    track.updateNowPlaying();
+                    return true;
+                }
+                return false;
+            })
+        },
+        pause: function (track) {
+            var self = this;
+            track.play = true;
+            track.addTimeStart();
+            self.tracks.each(function (track) {
+                track.toScrobbleOrNotToScrobble();
+            });
+            tracks.toTop(track);
+            track.updateNowPlaying();
+        },
+        stop: function (track) {
+            var self = this;
+            track.listenTime = data.duration;
+            track.toScrobbleOrNotToScrobble();
+            tracks.removeTrack(track);
+            self.tracks.removeTrack(track);
         },
         embedPath: function (node) {
             var self = this;
@@ -295,11 +307,12 @@ var privet2lastfm = function () {
 
 
             if (track) {
-                self.magicWithTrackAndList(track);
+                self.toggle(track);
             }
             else {
-                var nodeId = self._getNodeByTrackId(id).id;
-                if (id === nodeId) {
+                var nodeById = self._getNodeByTrackId(id);
+                if (node === nodeById) {
+                    console.log('PATH #1');
                     track = new Track(id, node);
                     if (self.location.match('playlist')) {
                         var urlArray = self.location.split('/');
@@ -313,7 +326,9 @@ var privet2lastfm = function () {
                         track.setPlaylistID(playlistid);
                     }
                     track.init();
+                    self.play(track);
                 } else {
+                    console.log('PATH #2');
                     track = new Track(0, node); // tracks with 0 as id are the mocks
                 }
                 self.tracks.add(track);
@@ -374,7 +389,7 @@ var privet2lastfm = function () {
                     }
                 }
                 if (track && track.play === undefined) {
-                    self.magicWithTrackAndList(track);
+                    self.toggle(track);
                 }
                 else {
                     console.log('Do nothing...');
@@ -384,10 +399,7 @@ var privet2lastfm = function () {
             }
             else if (data.type === 'stop') {
                 if (track) {
-                    track.listenTime = data.duration;
-                    track.toScrobbleOrNotToScrobble();
-                    tracks.removeTrack(track);
-                    self.tracks.removeTrack(track);
+                    self.stop(track);
                 }
 
             }
@@ -420,7 +432,6 @@ var privet2lastfm = function () {
     Track.prototype = {
         constructor: Track,
         init: function () {
-            this.play = true;
             this.addTimeStart();
             this.getOtherFromNode();
         },
@@ -563,9 +574,6 @@ var privet2lastfm = function () {
                 realDuration = timestops - timestarts;
             }
 
-            console.log(realDuration)
-            console.log((scrobblingPercent * this.duration * 1000 / 100))
-
             if (realDuration > (scrobblingPercent * this.duration * 1000 / 100) && this.duration) {
                 console.log('SCROBBLE')
                 var a = [];
@@ -578,6 +586,7 @@ var privet2lastfm = function () {
             }
         },
         updateNowPlaying: function () {
+            console.log('UPDATE LISTENING');
             var a = [];
             a[0] = this.artist;
             a[1] = this.title;
